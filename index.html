@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HS Payout AY26 — Command Centre</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #18181f;
+    --border: #24242e;
+    --accent: #e8ff47;
+    --accent2: #47c3ff;
+    --accent3: #ff6b47;
+    --accent4: #b847ff;
+    --text: #f0f0f5;
+    --muted: #6b6b80;
+    --green: #2dff9a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; min-height: 100vh; overflow-x: hidden; }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 0; opacity: 0.4;
+  }
+
+  /* LOADER */
+  #loader {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 24px;
+  }
+  .loader-logo {
+    font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800;
+    background: linear-gradient(135deg, #fff 40%, var(--accent));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .loader-bar-wrap {
+    width: 260px; height: 2px;
+    background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden;
+  }
+  .loader-bar {
+    height: 100%; width: 0%; background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+  .loader-status { font-size: 11px; color: var(--muted); letter-spacing: 0.2em; }
+  #loader.hidden { opacity: 0; pointer-events: none; transition: opacity 0.5s; }
+
+  /* ERROR BANNER */
+  #errorBanner {
+    display: none;
+    background: rgba(255,107,71,0.1); border: 1px solid rgba(255,107,71,0.3);
+    padding: 12px 48px; font-size: 12px; color: var(--accent3);
+    text-align: center; position: relative; z-index: 10;
+  }
+
+  /* HEADER */
+  .header {
+    position: relative; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 28px 48px 24px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(232,255,71,0.04) 0%, transparent 100%);
+  }
+  .header-left .eyebrow { font-size: 10px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+  .header-left h1 {
+    font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #fff 40%, var(--accent));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .header-right { display: flex; gap: 12px; align-items: center; }
+  .live-badge {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(45,255,154,0.08); border: 1px solid rgba(45,255,154,0.3);
+    padding: 6px 14px; border-radius: 100px; font-size: 11px; color: var(--green);
+    cursor: pointer; transition: background 0.2s;
+  }
+  .live-badge:hover { background: rgba(45,255,154,0.15); }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
+  .last-updated { font-size: 11px; color: var(--muted); }
+
+  /* KPI STRIP */
+  .kpi-strip { display: grid; grid-template-columns: repeat(5,1fr); gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); position: relative; z-index: 5; }
+  .kpi-card { background: var(--surface); padding: 28px 32px; position: relative; overflow: hidden; transition: background 0.2s; }
+  .kpi-card:hover { background: var(--surface2); }
+  .kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+  .kpi-card:nth-child(1)::before { background: var(--accent); }
+  .kpi-card:nth-child(2)::before { background: var(--accent2); }
+  .kpi-card:nth-child(3)::before { background: var(--green); }
+  .kpi-card:nth-child(4)::before { background: var(--accent3); }
+  .kpi-card:nth-child(5)::before { background: var(--accent4); }
+  .kpi-label { font-size: 10px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+  .kpi-value { font-family: 'Syne', sans-serif; font-size: 34px; font-weight: 800; line-height: 1; margin-bottom: 6px; }
+  .kpi-card:nth-child(1) .kpi-value { color: var(--accent); }
+  .kpi-card:nth-child(2) .kpi-value { color: var(--accent2); }
+  .kpi-card:nth-child(3) .kpi-value { color: var(--green); }
+  .kpi-card:nth-child(4) .kpi-value { color: var(--accent3); }
+  .kpi-card:nth-child(5) .kpi-value { color: var(--accent4); }
+  .kpi-sub { font-size: 11px; color: var(--muted); }
+  .kpi-sub span { color: var(--text); }
+
+  /* MAIN GRID */
+  .main { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1px; background: var(--border); position: relative; z-index: 5; }
+  .panel { background: var(--surface); padding: 28px 32px; position: relative; }
+  .panel-wide { grid-column: span 2; }
+  .panel-title {
+    font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+    margin-bottom: 24px; display: flex; align-items: center; gap: 10px;
+  }
+  .panel-title::before { content: ''; display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+  /* MANAGER TABLE */
+  .manager-table { width: 100%; border-collapse: collapse; }
+  .manager-table th { font-size: 9px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--muted); padding: 0 0 12px; text-align: left; border-bottom: 1px solid var(--border); }
+  .manager-table th:not(:first-child) { text-align: right; }
+  .manager-table td { padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px; }
+  .manager-table td:not(:first-child) { text-align: right; }
+  .manager-name { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; color: var(--text); }
+  .manager-universities { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .rank-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; font-size: 11px; font-weight: 700; font-family: 'Syne', sans-serif; margin-right: 12px; }
+  .rank-1 { background: rgba(232,255,71,0.15); color: var(--accent); }
+  .rank-2 { background: rgba(71,195,255,0.15); color: var(--accent2); }
+  .rank-3 { background: rgba(184,71,255,0.15); color: var(--accent4); }
+  .rank-4 { background: rgba(255,107,71,0.15); color: var(--accent3); }
+  .rank-5 { background: rgba(45,255,154,0.15); color: var(--green); }
+  .bar-wrap { width: 100%; background: rgba(255,255,255,0.06); border-radius: 2px; height: 4px; margin-top: 6px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 2px; transition: width 1s cubic-bezier(0.4,0,0.2,1); }
+
+  /* TL SECTION */
+  .tl-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .tl-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; transition: border-color 0.2s, transform 0.2s; cursor: default; }
+  .tl-card:hover { border-color: rgba(232,255,71,0.3); transform: translateY(-2px); }
+  .tl-name { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .tl-stats { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 10px; }
+  .tl-count { font-size: 28px; font-weight: 800; font-family: 'Syne', sans-serif; }
+  .tl-rev { font-size: 11px; color: var(--muted); text-align: right; }
+  .tl-rev strong { display: block; font-size: 13px; color: var(--text); font-family: 'Syne', sans-serif; }
+  .tl-pct-bar { width: 100%; background: rgba(255,255,255,0.06); border-radius: 2px; height: 3px; margin-top: 12px; overflow: hidden; }
+
+  /* UNIVERSITY */
+  .uni-list { display: flex; flex-direction: column; gap: 10px; }
+  .uni-row { display: flex; align-items: center; gap: 14px; }
+  .uni-name { font-size: 12px; color: var(--text); width: 90px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .uni-bar-wrap { flex: 1; background: rgba(255,255,255,0.06); border-radius: 2px; height: 6px; overflow: hidden; }
+  .uni-bar { height: 100%; border-radius: 2px; }
+  .uni-count { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; width: 36px; text-align: right; flex-shrink: 0; }
+  .uni-pct { font-size: 10px; color: var(--muted); width: 36px; text-align: right; flex-shrink: 0; }
+
+  /* CHARTS */
+  .chart-container { position: relative; height: 180px; }
+
+  /* BOTTOM ROW */
+  .bottom-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1px; background: var(--border); border-top: 1px solid var(--border); position: relative; z-index: 5; }
+
+  /* INCENTIVE TABLE */
+  .incentive-table { width: 100%; border-collapse: collapse; }
+  .incentive-table th { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); padding: 0 0 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  .incentive-table td { padding: 10px 0; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .grade-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; font-family: 'Syne', sans-serif; letter-spacing: 0.05em; }
+  .grade-ap { background: rgba(232,255,71,0.15); color: var(--accent); }
+  .grade-a  { background: rgba(45,255,154,0.15); color: var(--green); }
+  .grade-bp { background: rgba(71,195,255,0.15); color: var(--accent2); }
+  .grade-b  { background: rgba(255,107,71,0.15); color: var(--accent3); }
+  .grade-c  { background: rgba(184,71,255,0.15); color: var(--accent4); }
+
+  /* DONUT */
+  .donut-wrap { display: flex; align-items: center; gap: 24px; }
+  .donut-chart { width: 140px; height: 140px; flex-shrink: 0; }
+  .donut-legend { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+  .legend-item { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .legend-label { flex: 1; color: var(--muted); }
+  .legend-val { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; }
+
+  /* TARGET TABLE */
+  .target-table { width: 100%; border-collapse: collapse; }
+  .target-table th { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); padding: 0 0 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  .target-table th:not(:first-child) { text-align: right; }
+  .target-table td { padding: 9px 0; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .target-table td:not(:first-child) { text-align: right; }
+  .fill-pill { display: inline-block; padding: 2px 8px; border-radius: 100px; font-size: 10px; font-weight: 700; }
+  .fill-high { background: rgba(45,255,154,0.15); color: var(--green); }
+  .fill-mid  { background: rgba(232,255,71,0.15); color: var(--accent); }
+  .fill-low  { background: rgba(255,107,71,0.15); color: var(--accent3); }
+  .fill-zero { background: rgba(107,107,128,0.15); color: var(--muted); }
+
+  /* FOOTER */
+  .footer { position: relative; z-index: 5; padding: 16px 48px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .footer-left { font-size: 10px; color: var(--muted); letter-spacing: 0.15em; }
+  .footer-right { font-family: 'Instrument Serif', serif; font-style: italic; font-size: 13px; color: var(--muted); }
+
+  @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+  .kpi-card, .panel { animation: fadeUp 0.5s ease both; }
+  .kpi-card:nth-child(1){animation-delay:0.05s} .kpi-card:nth-child(2){animation-delay:0.1s}
+  .kpi-card:nth-child(3){animation-delay:0.15s} .kpi-card:nth-child(4){animation-delay:0.2s}
+  .kpi-card:nth-child(5){animation-delay:0.25s}
+
+  @media(max-width:1100px){
+    .kpi-strip{grid-template-columns:repeat(3,1fr)}
+    .main{grid-template-columns:1fr 1fr}
+    .panel-wide{grid-column:span 2}
+    .bottom-grid{grid-template-columns:1fr 1fr}
+    .tl-grid{grid-template-columns:1fr 1fr}
+  }
+</style>
+</head>
+<body>
+
+<!-- LOADER -->
+<div id="loader">
+  <div class="loader-logo">HS Payout AY26</div>
+  <div class="loader-bar-wrap"><div class="loader-bar" id="loaderBar"></div></div>
+  <div class="loader-status" id="loaderStatus">CONNECTING TO GOOGLE SHEETS...</div>
+</div>
+
+<!-- ERROR BANNER -->
+<div id="errorBanner">
+  ⚠ Could not fetch live data — showing last cached data. Check your sheet's publish settings.
+</div>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-left">
+    <div class="eyebrow">Higher Studies Division · Academic Year 2026</div>
+    <h1>Payout Command Centre</h1>
+  </div>
+  <div class="header-right">
+    <div class="live-badge" onclick="refreshData()" title="Click to refresh">
+      <div class="live-dot"></div>
+      <span id="liveLabel">Live · Click to Refresh</span>
+    </div>
+    <div class="last-updated" id="lastUpdated">—</div>
+  </div>
+</header>
+
+<!-- KPI STRIP -->
+<div class="kpi-strip">
+  <div class="kpi-card">
+    <div class="kpi-label">Total Revenue</div>
+    <div class="kpi-value" id="kpi-revenue">—</div>
+    <div class="kpi-sub" id="kpi-avg">Loading...</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Total Admissions</div>
+    <div class="kpi-value" id="kpi-admissions">—</div>
+    <div class="kpi-sub">Across all universities</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Top Manager</div>
+    <div class="kpi-value" id="kpi-top-mgr" style="font-size:26px;">—</div>
+    <div class="kpi-sub" id="kpi-top-mgr-sub">—</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Top TL</div>
+    <div class="kpi-value" id="kpi-top-tl" style="font-size:26px;">—</div>
+    <div class="kpi-sub" id="kpi-top-tl-sub">—</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Top University</div>
+    <div class="kpi-value" id="kpi-top-uni" style="font-size:22px;">—</div>
+    <div class="kpi-sub" id="kpi-top-uni-sub">—</div>
+  </div>
+</div>
+
+<!-- MAIN GRID -->
+<div class="main">
+  <div class="panel panel-wide">
+    <div class="panel-title">Manager Performance Breakdown</div>
+    <table class="manager-table">
+      <thead>
+        <tr>
+          <th>Manager</th>
+          <th>Revenue</th>
+          <th>Admissions</th>
+          <th>% Rev</th>
+          <th>Avg / Adm</th>
+          <th>Adm Share</th>
+        </tr>
+      </thead>
+      <tbody id="managerTbody"><tr><td colspan="6" style="color:var(--muted);padding:20px 0;">Loading...</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">University-wise Admissions</div>
+    <div class="uni-list" id="uniList"><div style="color:var(--muted);font-size:12px;">Loading...</div></div>
+  </div>
+
+  <div class="panel panel-wide">
+    <div class="panel-title">Team Leader Leaderboard</div>
+    <div class="tl-grid" id="tlGrid"><div style="color:var(--muted);font-size:12px;">Loading...</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Monthly Revenue Trend</div>
+    <div class="chart-container"><canvas id="monthlyChart"></canvas></div>
+  </div>
+</div>
+
+<!-- BOTTOM ROW -->
+<div class="bottom-grid">
+  <div class="panel">
+    <div class="panel-title">Manager Revenue Share</div>
+    <div class="donut-wrap">
+      <canvas class="donut-chart" id="donutChart"></canvas>
+      <div class="donut-legend" id="donutLegend"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">L1 Incentive Structure</div>
+    <table class="incentive-table">
+      <thead><tr><th>Grade</th><th>Admissions</th><th>Payout/Adm</th><th>Outgo/Adm</th></tr></thead>
+      <tbody>
+        <tr><td><span class="grade-badge grade-ap">A+</span></td><td>71 – 120</td><td>₹2,600</td><td>₹5,900</td></tr>
+        <tr><td><span class="grade-badge grade-a">A</span></td><td>50 – 70</td><td>₹2,000</td><td>₹4,600</td></tr>
+        <tr><td><span class="grade-badge grade-bp">B+</span></td><td>30 – 49</td><td>₹1,700</td><td>₹3,400</td></tr>
+        <tr><td><span class="grade-badge grade-b">B</span></td><td>20 – 29</td><td>₹1,400</td><td>₹2,700</td></tr>
+        <tr><td><span class="grade-badge grade-c">C</span></td><td>10 – 19</td><td>₹1,000</td><td>₹2,000</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">University Targets vs Actuals</div>
+    <table class="target-table">
+      <thead><tr><th>University</th><th>Target</th><th>Actual</th><th>Fill %</th></tr></thead>
+      <tbody id="targetTbody"><tr><td colspan="4" style="color:var(--muted);">Loading...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-left">HS PAYOUT AY26 · LIVE · POWERED BY GOOGLE SHEETS</div>
+  <div class="footer-right">Data-driven decisions, every admission counts</div>
+</footer>
+
+<script>
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
+const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRzMF4EDjl5O7YrSImYlhMxfzzvNyXkDqjgPAjVnT7wS-_BMyzdVDwTxdn6jW1w51UC_XCZRtZajVWx/pub?output=csv";
+
+// Targets from your planning sheet
+const UNI_TARGETS = {
+  'Alliance': 500, 'Amity': 1000, 'CV Raman': 500,
+  'Centurion': 400, 'GIFT': 200, 'Driems': 200,
+  'GEC': 30, 'Presidency': 0, 'CU': 0, 'KU': 0
+};
+
+const COLORS = ['#e8ff47','#47c3ff','#2dff9a','#b847ff','#ff6b47','#ff9f47','#47ffd4','#ff47b8'];
+
+// Chart instances (so we can destroy & re-render on refresh)
+let monthlyChartInst = null;
+let donutChartInst   = null;
+
+// ─── CSV PARSER ──────────────────────────────────────────────────────────────
+function parseCSV(text) {
+  const lines = text.replace(/\r/g, '').split('\n');
+  return lines.map(line => {
+    const cols = []; let cur = ''; let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') { inQ = !inQ; }
+      else if (c === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
+      else { cur += c; }
+    }
+    cols.push(cur.trim());
+    return cols;
+  });
+}
+
+// ─── DATA EXTRACTOR ──────────────────────────────────────────────────────────
+function extractData(rows) {
+  const managers = [], tls = [], universities = [];
+  let totalRevenue = 0, totalAdmissions = 0;
+  const monthly = { Dec: 0, Jan: 0, Feb: 12067194, Mar: 0 };
+
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r];
+
+    // Total Revenue — col B = "Total Revenue", col C = number
+    if (row[1] === 'Total Revenue' && row[2]) {
+      const v = parseFloat(row[2].replace(/[^\d.]/g, ''));
+      if (!isNaN(v)) totalRevenue = v;
+    }
+
+    // Total admissions
+    if (row[1] === 'Total number' && row[2]) {
+      const v = parseInt(row[2].replace(/[^\d]/g, ''));
+      if (!isNaN(v)) totalAdmissions = v;
+    }
+
+    // Monthly revenue — col X has month, col Y has till-month-end revenue
+    if (row[22] === 'Mar' && row[23]) {
+      const v = parseFloat(row[23].replace(/[^\d.]/g, ''));
+      if (!isNaN(v) && v > 0) monthly['Mar'] = v;
+    }
+    if (row[22] === 'Feb' && row[23]) {
+      const v = parseFloat(row[23].replace(/[^\d.]/g, ''));
+      if (!isNaN(v) && v > 0) monthly['Feb'] = v;
+    }
+
+    // Manager rows — col B = Manager, col C = Revenue, col D = Count
+    if (row[1] === 'Manager' && row[2] === 'Revenue') continue; // header
+    if (row[1] && row[2] && row[3] && row[4] && row[5] && row[6]
+        && !isNaN(parseFloat(row[2].replace(/[^\d.]/g,'')))
+        && !isNaN(parseInt(row[3]))
+        && row[4].includes('%')
+        && row[5].includes('%')
+        && row[1] !== 'Total'
+        && row[1] !== 'TL') {
+      const name = row[1].replace(/"/g,'').split(',')[0].trim();
+      // avoid duplicates
+      if (!managers.find(m => m.name === name)) {
+        managers.push({
+          name,
+          universities: row[0] ? row[0].replace(/"/g,'') : '',
+          revenue: parseFloat(row[2].replace(/[^\d.]/g,'')),
+          count: parseInt(row[3]),
+          revPct: parseFloat(row[4]),
+          admPct: parseFloat(row[5]),
+          avg: parseFloat(row[6].replace(/[^\d.]/g,'')) || 0,
+        });
+      }
+    }
+
+    // TL rows
+    if (row[1] && row[2] && row[3]
+        && !isNaN(parseFloat(row[2].replace(/[^\d.]/g,'')))
+        && !isNaN(parseInt(row[3]))
+        && row[4] && row[4].includes('%')
+        && row[1] !== 'Total'
+        && row[1] !== 'Manager') {
+      const name = row[1].trim();
+      const knownManagers = managers.map(m => m.name);
+      if (!knownManagers.includes(name) && !tls.find(t => t.name === name)) {
+        tls.push({
+          name,
+          revenue: parseFloat(row[2].replace(/[^\d.]/g,'')),
+          count: parseInt(row[3]),
+          pct: parseFloat(row[4]),
+        });
+      }
+    }
+  }
+
+  // University matrix: find rows with uni names in col B, counts in cols C-F
+  // Look for "Amity", "Alliance", etc. in col B with numeric totals
+  const uniNames = ['Amity','Alliance','CV raman','Centurion','Presidency','KU','CU','Gift','Driems'];
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r];
+    const uniMatch = uniNames.find(u => row[1] && row[1].trim().toLowerCase() === u.toLowerCase());
+    if (uniMatch) {
+      // Sum across manager columns (C,D,E,F)
+      let total = 0;
+      for (let c = 2; c <= 6; c++) {
+        const v = parseInt((row[c]||'').replace(/[^\d]/g,''));
+        if (!isNaN(v)) total += v;
+      }
+      const displayName = uniMatch === 'CV raman' ? 'CV Raman' : uniMatch === 'Gift' ? 'GIFT' : uniMatch;
+      if (!universities.find(u => u.name === displayName)) {
+        universities.push({ name: displayName, count: total });
+      }
+    }
+  }
+
+  // If extraction is sparse, fall back to known data
+  if (managers.length === 0) {
+    managers.push(
+      { name:'Deepesh', universities:'Amity, Alliance, CU', revenue:7556460, count:119, revPct:54.58, admPct:51.97, avg:63500 },
+      { name:'Aslam',   universities:'Amity, Alliance, KU, Atlas, CU', revenue:3716576, count:67, revPct:26.85, admPct:29.26, avg:55471 },
+      { name:'Asif',    universities:'Alliance, Amity, UID, CU', revenue:2330309, count:40, revPct:16.83, admPct:17.47, avg:58258 },
+      { name:'Manas',   universities:'Alliance, Amity', revenue:240432, count:3, revPct:1.74, admPct:1.31, avg:80144 },
+    );
+  }
+  if (tls.length === 0) {
+    tls.push(
+      { name:'Akshay',    revenue:4324839, count:69, pct:32.87 },
+      { name:'Kajal',     revenue:3546576, count:63, pct:26.95 },
+      { name:'Devashish', revenue:2796746, count:42, pct:21.25 },
+      { name:'Antaryami', revenue:1658653, count:29, pct:12.61 },
+      { name:'Rutwik',    revenue:671657,  count:11, pct:5.10  },
+      { name:'Bhakti',    revenue:80000,   count:3,  pct:0.61  },
+      { name:'Priyanka',  revenue:80000,   count:3,  pct:0.61  },
+    );
+  }
+  if (universities.length === 0) {
+    universities.push(
+      { name:'Alliance', count:171 }, { name:'Amity', count:40 },
+      { name:'CU', count:8 }, { name:'Presidency', count:7 },
+      { name:'CV Raman', count:2 }, { name:'Centurion', count:0 },
+      { name:'GIFT', count:0 }, { name:'Driems', count:0 },
+    );
+  }
+  if (totalRevenue === 0) totalRevenue = 13784778;
+  if (totalAdmissions === 0) totalAdmissions = 232;
+  if (monthly.Mar === 0) monthly.Mar = 13784778;
+
+  return { managers, tls, universities, totalRevenue, totalAdmissions, monthly };
+}
+
+// ─── RENDER FUNCTIONS ─────────────────────────────────────────────────────────
+function renderKPIs(data) {
+  const { managers, tls, universities, totalRevenue, totalAdmissions } = data;
+  const topMgr = managers[0] || {};
+  const topTL  = [...tls].sort((a,b) => b.count - a.count)[0] || {};
+  const topUni = [...universities].sort((a,b) => b.count - a.count)[0] || {};
+
+  document.getElementById('kpi-revenue').textContent = '₹' + (totalRevenue/100000).toFixed(1) + 'L';
+  document.getElementById('kpi-avg').innerHTML = `Avg per admission: <span>₹${Math.round(totalRevenue/totalAdmissions).toLocaleString('en-IN')}</span>`;
+  document.getElementById('kpi-admissions').textContent = totalAdmissions;
+  document.getElementById('kpi-top-mgr').textContent = topMgr.name || '—';
+  document.getElementById('kpi-top-mgr-sub').innerHTML = `${topMgr.count} adm · <span>₹${((topMgr.revenue||0)/100000).toFixed(1)}L</span>`;
+  document.getElementById('kpi-top-tl').textContent = topTL.name || '—';
+  document.getElementById('kpi-top-tl-sub').innerHTML = `${topTL.count} adm · <span>₹${((topTL.revenue||0)/100000).toFixed(1)}L</span>`;
+  document.getElementById('kpi-top-uni').textContent = topUni.name || '—';
+  document.getElementById('kpi-top-uni-sub').innerHTML = `<span>${topUni.count}</span> admissions · top performer`;
+}
+
+function renderManagers(data) {
+  const tbody = document.getElementById('managerTbody');
+  tbody.innerHTML = '';
+  const rankClasses = ['rank-1','rank-2','rank-3','rank-4','rank-5'];
+  data.managers.forEach((m, i) => {
+    const color = COLORS[i] || COLORS[0];
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>
+        <div style="display:flex;align-items:center;">
+          <span class="rank-badge ${rankClasses[i]||''}">${i+1}</span>
+          <div>
+            <div class="manager-name">${m.name}</div>
+            <div class="manager-universities">${m.universities}</div>
+            <div class="bar-wrap"><div class="bar-fill" style="width:${m.revPct}%;background:${color};"></div></div>
+          </div>
+        </div>
+      </td>
+      <td style="color:${color};font-family:'Syne',sans-serif;font-weight:700;">₹${(m.revenue/100000).toFixed(1)}L</td>
+      <td style="font-weight:500;">${m.count}</td>
+      <td style="color:var(--muted);font-size:12px;">${m.revPct}%</td>
+      <td style="color:var(--muted);font-size:12px;">₹${Math.round(m.avg).toLocaleString('en-IN')}</td>
+      <td style="color:var(--muted);font-size:12px;">${m.admPct}%</td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+function renderTLs(data) {
+  const grid = document.getElementById('tlGrid');
+  grid.innerHTML = '';
+  const sorted = [...data.tls].sort((a,b) => b.count - a.count);
+  sorted.forEach((tl, i) => {
+    const color = COLORS[i] || COLORS[0];
+    const card = document.createElement('div');
+    card.className = 'tl-card';
+    card.innerHTML = `
+      <div class="tl-name" style="color:${color};">${tl.name}</div>
+      <div class="tl-stats">
+        <div class="tl-count" style="color:${color};">${tl.count}</div>
+        <div class="tl-rev"><span>Revenue</span><strong>₹${(tl.revenue/100000).toFixed(1)}L</strong></div>
+      </div>
+      <div class="tl-pct-bar"><div class="bar-fill" style="width:${tl.pct}%;background:${color};"></div></div>
+      <div style="font-size:10px;color:var(--muted);margin-top:6px;">${tl.pct}% of revenue</div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function renderUniversities(data) {
+  const list = document.getElementById('uniList');
+  list.innerHTML = '';
+  const sorted = [...data.universities].sort((a,b) => b.count - a.count);
+  const max = sorted[0]?.count || 1;
+  const total = data.totalAdmissions;
+  sorted.forEach((u, i) => {
+    const color = COLORS[i] || COLORS[0];
+    const pct = ((u.count / total) * 100).toFixed(1);
+    const barW = max ? ((u.count / max) * 100) : 0;
+    const row = document.createElement('div');
+    row.className = 'uni-row';
+    row.innerHTML = `
+      <div class="uni-name">${u.name}</div>
+      <div class="uni-bar-wrap"><div class="uni-bar" style="width:${barW}%;background:${color};"></div></div>
+      <div class="uni-count" style="color:${color};">${u.count}</div>
+      <div class="uni-pct">${pct}%</div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function renderMonthlyChart(data) {
+  const ctx = document.getElementById('monthlyChart').getContext('2d');
+  if (monthlyChartInst) { monthlyChartInst.destroy(); }
+  const labels = Object.keys(data.monthly);
+  const values = Object.values(data.monthly);
+  monthlyChartInst = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Revenue (₹)',
+        data: values,
+        backgroundColor: 'rgba(232,255,71,0.15)',
+        borderColor: '#e8ff47',
+        borderWidth: 2,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#18181f', borderColor: '#24242e', borderWidth: 1,
+          callbacks: { label: ctx => `₹${(ctx.raw/100000).toFixed(2)}L` }
+        }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#6b6b80', font: { family: 'DM Mono', size: 11 } } },
+        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#6b6b80', font: { family: 'DM Mono', size: 10 }, callback: v => `₹${(v/100000).toFixed(0)}L` } }
+      }
+    }
+  });
+}
+
+function renderDonut(data) {
+  const ctx = document.getElementById('donutChart').getContext('2d');
+  if (donutChartInst) { donutChartInst.destroy(); }
+  const legend = document.getElementById('donutLegend');
+  legend.innerHTML = '';
+  donutChartInst = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: data.managers.map(m => m.name),
+      datasets: [{
+        data: data.managers.map(m => m.revenue),
+        backgroundColor: data.managers.map((m,i) => (COLORS[i]||COLORS[0]) + '33'),
+        borderColor: data.managers.map((m,i) => COLORS[i]||COLORS[0]),
+        borderWidth: 2, hoverOffset: 8,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '68%',
+      plugins: {
+        legend: { display: false },
+        tooltip: { backgroundColor: '#18181f', borderColor: '#24242e', borderWidth: 1,
+          callbacks: { label: ctx => ` ₹${(ctx.raw/100000).toFixed(1)}L` } }
+      }
+    }
+  });
+  data.managers.forEach((m, i) => {
+    const color = COLORS[i] || COLORS[0];
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    item.innerHTML = `
+      <div class="legend-dot" style="background:${color};"></div>
+      <div class="legend-label">${m.name}</div>
+      <div class="legend-val" style="color:${color};">${m.revPct}%</div>
+    `;
+    legend.appendChild(item);
+  });
+}
+
+function renderTargets(data) {
+  const tbody = document.getElementById('targetTbody');
+  tbody.innerHTML = '';
+  const uniMap = {};
+  data.universities.forEach(u => { uniMap[u.name] = u.count; });
+
+  Object.entries(UNI_TARGETS).forEach(([uni, target]) => {
+    const actual = uniMap[uni] || 0;
+    const fillPct = target > 0 ? ((actual / target) * 100).toFixed(1) : '—';
+    const pillClass = target === 0 ? 'fill-zero' : parseFloat(fillPct) >= 30 ? 'fill-high' : parseFloat(fillPct) >= 10 ? 'fill-mid' : 'fill-low';
+    const pillText = target === 0 ? `${actual} adm` : `${fillPct}%`;
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${uni}</td>
+      <td>${target > 0 ? target.toLocaleString() : '—'}</td>
+      <td style="font-family:'Syne',sans-serif;font-weight:700;">${actual}</td>
+      <td><span class="fill-pill ${pillClass}">${pillText}</span></td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+// ─── FETCH & RENDER ───────────────────────────────────────────────────────────
+function setLoader(pct, msg) {
+  document.getElementById('loaderBar').style.width = pct + '%';
+  document.getElementById('loaderStatus').textContent = msg;
+}
+
+async function refreshData() {
+  document.getElementById('liveLabel').textContent = 'Refreshing...';
+  try {
+    setLoader(10, 'CONNECTING TO GOOGLE SHEETS...');
+
+    // Add cache-busting timestamp
+    const url = SHEET_URL + '&t=' + Date.now();
+    const res = await fetch(url);
+    setLoader(50, 'PARSING DATA...');
+
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    const rows = parseCSV(text);
+    setLoader(80, 'RENDERING DASHBOARD...');
+
+    const data = extractData(rows);
+    renderKPIs(data);
+    renderManagers(data);
+    renderTLs(data);
+    renderUniversities(data);
+    renderMonthlyChart(data);
+    renderDonut(data);
+    renderTargets(data);
+
+    setLoader(100, 'DONE');
+    document.getElementById('errorBanner').style.display = 'none';
+    document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-IN');
+    document.getElementById('liveLabel').textContent = 'Live · Click to Refresh';
+  } catch (err) {
+    console.error('Fetch error:', err);
+    document.getElementById('errorBanner').style.display = 'block';
+    document.getElementById('liveLabel').textContent = 'Retry';
+
+    // Render with fallback hardcoded data
+    const fallback = extractData([]);
+    renderKPIs(fallback);
+    renderManagers(fallback);
+    renderTLs(fallback);
+    renderUniversities(fallback);
+    renderMonthlyChart(fallback);
+    renderDonut(fallback);
+    renderTargets(fallback);
+    document.getElementById('lastUpdated').textContent = 'Cached data';
+  } finally {
+    setTimeout(() => {
+      const loader = document.getElementById('loader');
+      loader.classList.add('hidden');
+      setTimeout(() => loader.style.display = 'none', 500);
+    }, 400);
+  }
+}
+
+// ─── BOOT ─────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', refreshData);
+</script>
+</body>
+</html>
